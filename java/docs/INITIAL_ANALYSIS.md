@@ -125,9 +125,9 @@ These are the rules the code actually applies today. They are the behavior to pr
 
 | `planType` (exact text) | Earns interest when | Monthly interest (`double`) | Evidence |
 |---|---|---|---|
-| `"basic"` | `days > 30` (day 31 onwards, no upper limit) | `balance * 0.01 / 12` | [T] `appliesOneMonthOfInterestOnlyWithinEligibleDays` (0, 30, 31, 3650) |
+| `"basic"` | `days > 30` (day 31 onwards, no upper limit) | `balance * 0.01 / 12` | [T] `appliesOneMonthOfInterestOnlyWithinEligibleDays` (0, 29, 30, 31, 3650) |
 | `"student"` | `30 < days < 366` (days 31–365) | `balance * 0.03 / 12` | [T] same test (30, 31, 365, 366) |
-| `"premium"` | `days > 45` (day 46 onwards; the 30-day check is redundant here) | `balance * 0.05 / 12` | [T] same test (30, 31, 45, 46) |
+| `"premium"` | `days > 45` (day 46 onwards; the 30-day check is redundant here) | `balance * 0.05 / 12` | [T] same test (30, 31, 44, 45, 46) |
 | anything else | never | `0` | [T] `unknownOrDifferentlyCasedPlanTypeEarnsNoInterest` |
 
 ### 3.2 Calculation and rounding
@@ -138,7 +138,7 @@ These are the rules the code actually applies today. They are the behavior to pr
 | R2 | Matching the plan type is **case-sensitive and exact**: `"Basic"`, `"PREMIUM"`, `" student"` and `""` earn nothing. | [T] `unknownOrDifferentlyCasedPlanTypeEarnsNoInterest` |
 | R3 | **Only the interest is rounded:** to 2 decimals, `HALF_UP`. | [T] `roundsOnlyTheInterestHalfUpToTwoDecimalsFromItsExactBinaryValue` |
 | R4 | **Rounding starts from the exact binary value of the `double`** (`new BigDecimal(double)`). For example, 18.00 basic gives interest `0.01499999…`, which becomes 0.01. `BigDecimal.valueOf` would give 0.02. | [T] same test (18.00 basic, 25.20 premium) |
-| R5 | **The balance itself is never rounded.** Its extra decimals are kept. | [T] `doesNotRoundTheBalanceItself` |
+| R5 | **The balance itself is never rounded.** Its extra decimals are kept, and the `double` sum can pick up floating-point noise: student 1234567.89 → `1237654.3099999998`. | [T] `doesNotRoundTheBalanceItself`, `appliesTheAnnualRateDividedByTwelve` |
 | R6 | **Negative balances** get negative interest; `HALF_UP` rounds away from zero (−6.00 → −6.01). | [T] rounding test |
 | R7 | The sum is calculated in `double`. Very large balances keep only `double` precision (1e15 → 1.0008333333333334E15). | [T] `keepsDoublePrecisionForVeryLargeBalances` |
 | R8 | The expression order is `balance * rate / 12`. Rewriting it as `balance * (rate / 12)` *may* change the last bit of the result. | [C] code; the effect is not demonstrated by a test |
@@ -207,11 +207,12 @@ The README says invalid-input handling is not required, so these are documented 
 ## 5. Test Coverage
 
 ### 5.1 Characterization tests — written (step 1)
-`TimeDepositCalculatorTest`: 32 test cases, all passing, with values recorded from the original implementation.
+`TimeDepositCalculatorTest`: 43 test cases, all passing, with values recorded from the original implementation.
 
 | Area | Cases | Test |
 |---|---|---|
-| Day boundaries | basic 0/30/31/3650; student 30/31/365/366; premium 30/31/45/46 | `appliesOneMonthOfInterestOnlyWithinEligibleDays` |
+| Day boundaries | basic 0/29/30/31/3650; student 30/31/365/366; premium 30/31/44/45/46 | `appliesOneMonthOfInterestOnlyWithinEligibleDays` |
+| Exact rates | each plan with 50000.00, 999.99 and 1234567.89 | `appliesTheAnnualRateDividedByTwelve` |
 | Plan type | `gold`, `Basic`, `PREMIUM`, `' student'`, `''` | `unknownOrDifferentlyCasedPlanTypeEarnsNoInterest` |
 | Rounding | below half a cent → 0; exact half → up; binary below half (18.00 basic, 25.20 premium); zero; negative | `roundsOnlyTheInterestHalfUpToTwoDecimalsFromItsExactBinaryValue` |
 | Unrounded balance | 100.005 basic | `doesNotRoundTheBalanceItself` |
