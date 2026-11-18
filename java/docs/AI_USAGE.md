@@ -1,6 +1,6 @@
 # AI-Assisted Development
 
-This document records how AI assistance was used in this take-home exercise so far. It covers the analysis, characterization tests and domain refactoring. The REST API, persistence and integration tests have **not** been implemented yet; they will be added here when they are.
+This document records how AI assistance was used in this take-home exercise. It covers the analysis, characterization tests, domain refactoring, the architecture plan, and the Spring Boot implementation (persistence, REST API, integration tests).
 
 ## 1. Tools and Setup
 
@@ -9,8 +9,9 @@ This document records how AI assistance was used in this take-home exercise so f
 | AI coding assistant | Claude Code CLI 2.1.327 (version at the time of writing) |
 | Model | Claude Opus 5.5 (`claude-opus-5-5`) |
 | IDE | Eclipse (formatting and manual review) |
-| JDK / build | OpenJDK 21.0.8 running a Java 17 build (`maven.compiler.source/target = 17`), Apache Maven 3.9.9 |
-| Test libraries | JUnit 5.9.0 (`junit-jupiter-engine`, `junit-jupiter-params`), AssertJ 3.23.1 |
+| JDK / build | OpenJDK 21.0.8 running a Java 17 build (`java.version = 17`), Apache Maven 3.9.9 |
+| Framework | Spring Boot 3.5.16, springdoc-openapi 2.10.0, Flyway 11.7.2, PostgreSQL 17 (Docker Engine 29.7.2) |
+| Test libraries | JUnit 5.12.2, AssertJ 3.27.7, Testcontainers 1.21.4 (managed by Spring Boot). The domain phase used JUnit 5.9.0 and AssertJ 3.23.1. |
 
 ### Project configuration
 - **`CLAUDE.md`** (committed in `e164ca6`) holds the project rules the assistant follows. In summary:
@@ -23,7 +24,8 @@ This document records how AI assistance was used in this take-home exercise so f
   - no production changes during analysis; ask for approval before significant architectural changes;
   - no commits without approval.
 - **Ponytail plugin** (a Claude Code plugin in the developer's local setup, loaded at session start). It tells the assistant to make the smallest complete change and avoid speculative abstractions. It reinforced the "keep it proportionate" rule in `CLAUDE.md`.
-- **Plan mode** was used for the design review (§3.4): the assistant wrote a findings report and proposal, and made changes only after explicit approval.
+- **Plan mode** was used for the design review (§3.4) and the architecture plan (§3.5): the assistant wrote findings and a proposal, and made changes only after explicit approval.
+- **Memory:** one saved preference: never edit the assignment `README.md` in the repository root; solution documentation lives under `java/`.
 
 ### Reproducing the setup
 Open the `java/` directory in Claude Code. `CLAUDE.md` is loaded automatically. The developer's prompts are listed in §2.
@@ -46,6 +48,12 @@ The assistant never commits.
 | Characterization tests | Pin the existing behavior: boundaries, exact rates, rounding, multiple and repeated updates, unknown plans; parameterized JUnit 5 + AssertJ; no production changes | `TimeDepositCalculatorTest` | `a9f0265` |
 | Clean Code refactoring | Improve readability without changing behavior; no Strategy pattern or extra layers; plus developer requests: `PlanType` enum, rate and free days as enum fields, a more readable `earnsInterest`, rename `roundToCents` | `PlanType`, refactored calculator, Javadoc | `e87cd95` |
 | Design review | Review against README and SOLID; recommend keeping the design unchanged if it is sufficient | Eligibility moved into `PlanType.earnsInterestOn` | `3302aca` |
+| AI usage documentation | Document the workflow from the repository history; don't invent versions or results | This file | `35762e0` |
+| Architecture plan | Plan Spring Boot, REST, JPA, Flyway, Testcontainers: contracts, layers, schema, transactions, tests, steps; then two rounds of developer revisions (§3.5) | Approved plan rev. 3 | — |
+| Spring Boot skeleton + database | Implement plan steps 1–2 | Boot parent, Flyway schema, dev-only demo data, `compose.yaml`, Testcontainers | `4cbe0a2` |
+| Persistence | Implement plan step 3 | Entities, port, adapter, adapter tests | `5b20e7a` |
+| REST API | Implement plan step 4 | Service, controller, response records, API test | `1bdb393` |
+| Finish | Implement plan step 5 | `java/README.md`, documentation updates, dependency review | uncommitted |
 
 ## 3. AI-Assisted Work
 
@@ -91,6 +99,34 @@ The assistant never commits.
 - **Verdict:** the design is sufficient. A new plan with the same rule shape is one enum line, and the calculator has one clear job.
 - **One change made:** the eligibility window moved into `PlanType.earnsInterestOn(days)`, and the getters that exposed it were removed (`3302aca`).
 
+### 3.5 Architecture plan and its revisions
+The assistant produced the plan; the developer revised it twice before approving it.
+- **Rev. 2 (developer review):**
+  - **Bootstrap order:** database dependencies are added only together with Testcontainers, so no test needs PostgreSQL before it is available.
+  - **Query count:** the update path dropped an extra `findAllById` SELECT.
+  - **Lock ordering:** deterministic, by id.
+  - **Demo data:** separated from the schema migrations and loaded only in a `dev` profile.
+  - **Money boundary:** documented and tested.
+  - **Tests:** a slimmer suite, with the overlapping mock-based tests dropped.
+- **Rev. 3 (developer decisions):**
+  - short-lived transactions;
+  - no application-level transaction for GET;
+  - one short `@Transactional` for POST;
+  - **no locking**, because concurrency is outside the README;
+  - Open Session in View disabled;
+  - an explicit explanation of why the POST is not split into a read outside the transaction and a write inside it.
+
+### 3.6 Spring Boot implementation
+The assistant implemented the plan in steps; the developer committed each step after review.
+- **Application:**
+  - `TimeDepositService` reuses `TimeDepositCalculator.updateBalance` unchanged;
+  - the output port `TimeDepositRepository` is implemented by a JPA adapter;
+  - entities never leave the persistence package.
+- **REST:** `POST /time-deposits/balance-updates` → 204 and `GET /time-deposits` → 200, documented code-first with springdoc.
+- **Corrections found during implementation:**
+  - **Plan error:** the plan said `saveBalances` would be "still correct, just slower" outside a transaction. That was wrong: `getReferenceById` would return an uninitialized proxy, and setting the balance would throw. The method is now `@Transactional` and joins the caller's transaction.
+  - **Order-dependent test:** `DemoDataMigrationTest` failed in the full suite. It shared a database with tests that use different Flyway settings, so the result depended on test order. It now has its own container.
+
 ## 4. Decisions and Rejected Alternatives
 
 | Decision | Rejected alternative | Reason |
@@ -100,8 +136,13 @@ The assistant never commits.
 | Plan terms as data in the `PlanType` enum | `InterestPolicy` / Strategy classes (in the original plan); a string-keyed map | The plans differ only in data, not behavior. The enum prevents typing mistakes. |
 | `PlanType.fromCode` returns `Optional` | `Enum.valueOf` | `valueOf` throws on unknown plans, which earned 0 before. |
 | `TimeDeposit` keeps `String planType` and has no `equals`/`hashCode` | Change the field type; add `equals` | It's a shared class: no breaking changes, and no change to how deposits compare. |
-| Code-first OpenAPI (springdoc) *(decided, not yet implemented)* | Contract-first YAML + generator | Developer decision. |
-| Spring Data JPA *(decided, not yet implemented)* | `JdbcClient` with plain SQL (the assistant's original suggestion) | Developer decision. |
+| Code-first OpenAPI (springdoc) | Contract-first YAML + generator | Developer decision. |
+| Spring Data JPA | `JdbcClient` with plain SQL (the assistant's original suggestion) | Developer decision. |
+| No locking; lost-update risk documented | Pessimistic `SELECT … FOR UPDATE` (proposed in rev. 2); optimistic `@Version` | Developer decision: concurrency control is outside the README. Neither option would make POST idempotent. |
+| One short transaction for POST; none in the application layer for GET | Reading outside the transaction and writing inside it | A split would add stale-read and lost-update risk and lose atomicity. GET is a single query. |
+| Demo data in a dev-only repeatable Flyway script | Seed data in the versioned schema migrations | Demo data shouldn't reach every environment or the tests. |
+| Real-stack API test (Testcontainers), no Mockito | `@WebMvcTest` with mocks; a service unit test with a fake | They overlapped with the API test, which checks the real JSON, transactions and SQL. |
+| Balance rounded explicitly when stored (`HALF_UP`, 2 decimals) | Leaving the rounding to PostgreSQL | Explicit and tested; the calculator's raw `double` is unchanged. |
 | Don't preserve the original `null` plan-type behavior | A global 30-day check before the plan lookup | The README says invalid input need not be handled. |
 
 **How the `null` plan-type decision developed:** moving the interest-free days into `PlanType` meant a `null` plan type threw at every age; the original threw only after day 30. The developer first asked for the original behavior to be restored, which was done and tested. The developer then reconsidered and accepted the change, citing the README, so the restoration and its test were removed again. The final state is documented as N2 in `INITIAL_ANALYSIS.md`.
@@ -126,9 +167,19 @@ Every result below was actually run during this work:
   - result: **0 bit differences**, after every refactoring step.
   - This comparison was a temporary script outside the repository and is **not** part of the committed test suite.
 - **Public API:** `javap` output for `TimeDeposit` and `TimeDepositCalculator` was identical before and after the refactoring.
-- **Committed characterization tests:** `git diff` confirmed they were never changed by the refactoring.
+- **Committed characterization tests:** `git diff` confirmed they were never changed by the refactoring or by the Spring Boot work.
 
-Not yet verified: the REST endpoints, persistence and integration tests (Testcontainers needs Docker, which was not running during the analysis).
+Spring Boot implementation:
+- **Full suite:** 61 tests, 0 failures: 43 characterization, 10 `PlanTypeTest`, 3 persistence adapter, 4 API, 1 demo migration.
+- **Query count (Hibernate SQL log):**
+  - update path: 1 SELECT, then UPDATEs only for rows that changed, with no extra SELECT;
+  - read path: 1 fetch-join SELECT.
+- **Test-order independence:** after the `DemoDataMigrationTest` fix, the database tests also passed when run as separate subsets.
+- **Manual end-to-end:** `docker compose up`, then the app with the `dev` profile.
+  - Flyway applied `V1` and the demo script; a restart reported "Schema is up to date" with no duplicate rows.
+  - GET → POST (`204`) → GET showed the expected balances (`10008.33`, `20050.00`, `100416.67`; the deposits that weren't eligible stayed unchanged).
+  - Swagger UI returned `200`.
+- **Dependency review:** `mvn dependency:analyze` reported no dependency that is actually unused. Its "unused" entries are starters, Flyway and springdoc, which Spring Boot loads through auto-configuration at runtime.
 
 ## 6. Responsibility
 

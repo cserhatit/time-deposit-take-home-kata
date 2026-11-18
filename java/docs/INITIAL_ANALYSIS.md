@@ -197,10 +197,10 @@ The README says invalid-input handling is not required, so these are documented 
 |---|---|---|
 | K1 | **Rounding regression:** a well-meant "fix" (`BigDecimal.valueOf`, rounding the balance, reordering the formula) silently changes results. | R3–R7 are pinned by tests. R8 is not pinned; keep the expression exactly as written. |
 | K2 | **Boundary regression** at day 30/31, 45/46 and 365/366. | Pinned by tests. |
-| K3 | **Repeated updates:** the update endpoint applies interest on every call; two calls, or two at the same time, double-apply it. | Documented [A]; see §6, A5 and A13. |
-| K4 | **Database precision:** converting between `double` (domain) and `DECIMAL` (database) can round or add floating-point noise. | Conversion handled in the persistence adapter only; covered by a Testcontainers round-trip test (planned). |
+| K3 | **Repeated updates:** the update endpoint applies interest on every call; two calls, or two at the same time, double-apply it. | Documented, not guarded: every POST applies a month by design (A5). Concurrent POSTs can lose an update, because there is no locking (A13). |
+| K4 | **Database precision:** converting between `double` (domain) and `DECIMAL` (database) can round or add floating-point noise. | Conversion happens only in `TimeDepositPersistenceAdapter`: rounded explicitly with `HALF_UP` to 2 decimals on save; covered by `TimeDepositPersistenceAdapterTest` and `TimeDepositApiTest`. |
 | K5 | **The "shared" `TimeDeposit`:** changing its public API could break consumers we can't see. | Keep it unchanged [A]. |
-| K6 | **Environment:** Testcontainers needs a running Docker daemon; Docker was not running at analysis time. | Note it in the README. |
+| K6 | **Environment:** Testcontainers needs a running Docker daemon; Docker was not running at analysis time. | Documented in `java/README.md`. |
 
 ---
 
@@ -226,10 +226,11 @@ Supporting change: `junit-jupiter-params` 5.9.0 (test scope) was added to `pom.x
 ### 5.2 Still missing
 - **Intentionally not tested:** the invalid-input behaviors N1–N3. Out of scope per the README.
 - **Not demonstrated by a test:** R8 (calculation order). It is a general floating-point property; there's no concrete input showing a difference.
-- **Planned integration tests:**
-  - Persistence adapter against PostgreSQL via Testcontainers: entity mapping, camelCase names, decimal round trip, withdrawals loaded per deposit.
-  - Web layer (MockMvc): both endpoints, status codes, response schema matches the generated OpenAPI document.
-  - End-to-end: seed → `POST /time-deposits/balance-updates` → `GET /time-deposits` → expected balances and withdrawals.
+- **Integration tests (written, PostgreSQL via Testcontainers):**
+  - `TimeDepositPersistenceAdapterTest`: entity mapping with camelCase names, withdrawals loaded in one query, the decimal round trip.
+  - `TimeDepositApiTest`: both endpoints over HTTP, exact JSON, interest results, a repeated POST, and that the OpenAPI document lists exactly two paths.
+  - `DemoDataMigrationTest`: the dev-only demo data applies cleanly.
+  - A `@WebMvcTest` with mocks was planned but dropped, because it overlapped with `TimeDepositApiTest`.
 
 ---
 
@@ -244,12 +245,12 @@ Supporting change: `junit-jupiter-params` 5.9.0 (test scope) was added to `pom.x
 | A5 | Repeated calls to the update endpoint | Each call applies interest again (S3). A guard would change behavior, so this is documented, not prevented. | [T] calculator / [A] endpoint |
 | A6 | Shape of `withdrawals` in GET | An array of `{id, amount, date}` per deposit. | [A] |
 | A7 | Do withdrawals affect interest? | No. They are read-model data only. | [C] |
-| A8 | Decimal precision and scale | `NUMERIC(19,2)`. `double` ↔ `BigDecimal` conversion happens in the persistence adapter via `BigDecimal.valueOf`; the calculator is unchanged. | [A] |
-| A9 | camelCase table and column names | Kept exactly as specified, mapped explicitly in the JPA entities so Hibernate doesn't convert them to snake_case. | [A] |
+| A8 | Decimal precision and scale | `NUMERIC(19,2)`. `double` ↔ `BigDecimal` conversion happens in the persistence adapter: `BigDecimal.valueOf(double).setScale(2, HALF_UP)` on save. The stored value can differ from the calculator's raw `double` (student 1234567.89: `1237654.3099999998` → `1237654.31`); the calculator itself is unchanged. | [A], tested |
+| A9 | camelCase table and column names | Kept exactly as specified, using quoted identifiers and Hibernate's standard naming strategy, so Spring's snake_case conversion doesn't apply. | [A] |
 | A10 | Plan type values | Lowercase `basic` / `student` / `premium`, stored as given; unknown values earn nothing. | [T] |
 | A11 | HTTP verb and path of the update endpoint | `POST /time-deposits/balance-updates` → `204 No Content`. | [A] decided by the author |
-| A12 | Initial data | A Flyway seed migration with sample deposits and withdrawals, so the API can be tried right away. | [A] |
-| A13 | Concurrent update calls | Out of scope; each update runs in a single transaction. | [A] |
+| A12 | Initial data | Demo deposits and withdrawals are in a separate repeatable Flyway script (`db/demo`), loaded **only** by the `dev` profile. The schema (`db/migration`) applies everywhere. | [A] |
+| A13 | Concurrent update calls | Out of scope, so **no locking** (author decision). Each POST is one short transaction, but two at the same time can lose one month (lost update). Possible fixes, not implemented: `SELECT … FOR UPDATE ORDER BY id`, or `@Version`. Neither would make POST idempotent. | [A] |
 | A14 | Can `TimeDeposit` gain a `withdrawals` field? | No: keep `TimeDeposit` unchanged and model withdrawals in the read model (conservative reading of "no breaking changes"). | [A] |
 
 ---
@@ -262,12 +263,12 @@ Small steps, each a separate atomic commit with all tests green:
 |---|---|---|
 | 1 | **Characterization tests** (§5.1), replacing the test that checked nothing. No production change. | Done (`a9f0265`) |
 | 2 | **Clean up `updateBalance` internally:** for-each loop, clear names, named constants. Same signature, same arithmetic. | Done (`e87cd95`) |
-| 3 | **Plan terms in the `PlanType` enum (the extensibility point)** — *replaces the originally planned `InterestPolicy` classes.* Each constant holds its code, annual rate, interest-free days and last interest day; `PlanType.earnsInterestOn(days)` owns the eligibility window. A new plan with the same rule shape is one enum line; the calculator is unchanged. Formula and rounding stay in the calculator, unchanged. | Done (uncommitted) |
-| 4 | **Spring Boot setup** with a Flyway schema and seed, and PostgreSQL. No endpoints yet. | Planned |
-| 5 | **Persistence adapter:** Spring Data JPA entities and repositories behind the `TimeDepositRepository` interface (output port), with Testcontainers tests. | Planned |
-| 6 | **Application services:** `UpdateAllBalancesService` (load → `updateBalance` → save, in one transaction) and `GetAllTimeDepositsService`. | Planned |
-| 7 | **REST controller with springdoc annotations** (code-first OpenAPI, Swagger UI) for the two endpoints, with web-layer tests. | Planned |
-| 8 | **Finish:** end-to-end test, dependency and dead-code review, README (Swagger usage, assumptions), AI usage documentation. | Planned |
+| 3 | **Plan terms in the `PlanType` enum (the extensibility point)** — *replaces the originally planned `InterestPolicy` classes.* Each constant holds its code, annual rate, interest-free days and last interest day; `PlanType.earnsInterestOn(days)` owns the eligibility window. A new plan with the same rule shape is one enum line; the calculator is unchanged. Formula and rounding stay in the calculator, unchanged. | Done (`3302aca`) |
+| 4 | **Spring Boot setup:** Boot 3.5.16 parent, web and springdoc; no database dependencies yet, because they would trigger DataSource auto-configuration. | Done (`4cbe0a2`) |
+| 5 | **Database:** JPA, Flyway, PostgreSQL; `V1` schema, dev-only demo data, `compose.yaml`, shared Testcontainers configuration. | Done (`4cbe0a2`) |
+| 6 | **Persistence adapter:** `Withdrawal`, entities, Spring Data repository, `TimeDepositRepository` port, adapter, with Testcontainers tests. | Done (`5b20e7a`) |
+| 7 | **Application service and REST API:** `TimeDepositService` (one `@Transactional` for the POST only), controller, response records, springdoc annotations, API test. | Done (`1bdb393`) |
+| 8 | **Finish:** `java/README.md` (run, Swagger usage, assumptions), documentation updates, dependency and dead-code review. | Done (uncommitted) |
 
 Design notes for step 3 (decided by the author):
 - **Plan types are the `PlanType` enum** (decided by the author, to avoid typing mistakes). `TimeDeposit` keeps its `String planType` (shared API); `PlanType.fromCode` matches case-sensitively and returns `Optional.empty()` for unknown codes instead of throwing like `Enum.valueOf`, which keeps R2 and A10.
@@ -284,8 +285,8 @@ Hexagonal architecture, kept proportionate:
 org.ikigaidigital
 ├── TimeDeposit, TimeDepositCalculator,     ← domain; package and class names unchanged (shared)
 │   PlanType, Withdrawal record
-├── application/                             ← UpdateAllBalancesService, GetAllTimeDepositsService,
-│                                              TimeDepositRepository (output port interface)
+├── application/                             ← TimeDepositService (both use cases), TimeDepositRepository (output port),
+│                                              TimeDepositWithWithdrawals (read record)
 └── adapter/
     ├── in/web/                              ← REST controller with springdoc annotations, DTO mapping
     └── out/persistence/                     ← JPA entities, Spring Data repositories, entity ↔ domain mapping (double ↔ DECIMAL)
@@ -294,7 +295,7 @@ org.ikigaidigital
 - **Domain:** no dependency on any framework. `TimeDeposit` and `TimeDepositCalculator` keep their package, class names and public API.
 - **Interfaces:** only where there is a concrete benefit: the output port `TimeDepositRepository` (dependency inversion toward the database) only. Plan-specific rules are data in the `PlanType` enum, so no interest-policy interface is needed. The use cases are plain service classes; input-port interfaces would add nothing here.
 - **Read model:** GET returns a `TimeDeposit` together with its `List<Withdrawal>`, mapped to the API DTO. `TimeDeposit` stays untouched.
-- **Stack:** Spring Boot 3.x (Java 17), Spring Data JPA, springdoc-openapi, PostgreSQL, Flyway, Testcontainers (PostgreSQL), JUnit 5, AssertJ. Exact versions will be pinned when `pom.xml` is changed.
+- **Stack:** Spring Boot 3.5.16 (Java 17), Spring Data JPA, springdoc-openapi 2.10.0, PostgreSQL 17, Flyway, Testcontainers (PostgreSQL), JUnit 5, AssertJ. All versions except springdoc are managed by the Spring Boot BOM.
 - **Money:** the legacy `double` calculation is preserved. `BigDecimal` is used at the API and persistence boundaries.
 
 ### Decisions (all made by the author)
@@ -303,6 +304,12 @@ org.ikigaidigital
    - The JPA entities (`TimeDepositEntity`, `WithdrawalEntity`) are separate from the domain `TimeDeposit`, so the shared class gets no JPA annotations.
    - Flyway owns the schema; Hibernate only validates it (`ddl-auto=validate`).
    - The camelCase names are mapped explicitly.
-   - Withdrawals are fetched together with their deposits (fetch join / `@EntityGraph`), to avoid one query per deposit (the N+1 problem).
+   - Withdrawals are fetched together with their deposits (one fetch-join query), to avoid one query per deposit (the N+1 problem).
 3. **Interest window per plan:** interest-free days and last interest day are fields of `PlanType` (no policy classes).
 4. **Update endpoint:** `POST /time-deposits/balance-updates` → `204 No Content`.
+5. **Transactions (rev. 3):**
+   - POST: one short `@Transactional` on `TimeDepositService.updateAllBalances()` covering load, calculation and save.
+   - GET: no application transaction; the adapter loads and maps everything in one query.
+   - `spring.jpa.open-in-view=false`.
+   - Not split into a read outside the transaction and a write inside it: that would add stale-read risk and lose atomicity.
+6. **No locking:** concurrency control is outside the README (see A13).
