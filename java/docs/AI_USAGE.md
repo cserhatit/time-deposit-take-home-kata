@@ -53,7 +53,8 @@ The assistant never commits.
 | Spring Boot skeleton + database | Implement plan steps 1–2 | Boot parent, Flyway schema, dev-only demo data, `compose.yaml`, Testcontainers | `4cbe0a2` |
 | Persistence | Implement plan step 3 | Entities, port, adapter, adapter tests | `5b20e7a` |
 | REST API | Implement plan step 4 | Service, controller, response records, API test | `1bdb393` |
-| Finish | Implement plan step 5 | `java/README.md`, documentation updates, dependency review | uncommitted |
+| Finish | Implement plan step 5 | `java/README.md`, documentation updates, dependency review | `a7ee4e0` |
+| Calculation extensibility | Review enum vs. strategy; add a minimal strategy extension point without changing behavior; developer adjustments: method name `calculateInterest`, the "gold" example only in tests | `InterestCalculationStrategy`, `StandardInterestCalculation`, `TimeDepositCalculatorStrategyTest` | uncommitted |
 
 ## 3. AI-Assisted Work
 
@@ -127,13 +128,27 @@ The assistant implemented the plan in steps; the developer committed each step a
   - **Plan error:** the plan said `saveBalances` would be "still correct, just slower" outside a transaction. That was wrong: `getReferenceById` would return an uninitialized proxy, and setting the balance would throw. The method is now `@Transactional` and joins the caller's transaction.
   - **Order-dependent test:** `DemoDataMigrationTest` failed in the full suite. It shared a database with tests that use different Flyway settings, so the result depended on test order. It now has its own container.
 
+### 3.7 Interest calculation strategy
+- **Review:** the enum varies plan *data*; the strategy varies calculation *behavior*. The gain is narrow but real, and it meets the README's extensibility requirement.
+- **Change:**
+  - the legacy rule moved verbatim into `StandardInterestCalculation`;
+  - `TimeDepositCalculator` keeps the loop and the `new BigDecimal(double)` / `HALF_UP` rounding;
+  - an added constructor accepts a strategy, and the no-argument constructor still uses the standard rule.
+- **Developer adjustments:** the method is named `calculateInterest`; the hypothetical "gold" plan exists only in a test.
+- **Verification:**
+  - the 43 characterization tests are unchanged and pass;
+  - the bit-for-bit comparison against the original calculator still shows 0 differences over 2,000,000 random deposits;
+  - `javap` shows the only public API change is the new constructor;
+  - two new behavior tests: a custom strategy is used and rounded the legacy way; a new rule can delegate to the standard one.
+
 ## 4. Decisions and Rejected Alternatives
 
 | Decision | Rejected alternative | Reason |
 |---|---|---|
 | Keep `new BigDecimal(double)` | `BigDecimal.valueOf(double)` | Changes legacy rounding (e.g. 18.00 basic). |
 | Keep `balance * rate / 12` and the `double` arithmetic | `balance * (rate / 12)`; `BigDecimal` throughout | The README requires unchanged behavior. Reordering *may* change results (not shown by a test). |
-| Plan terms as data in the `PlanType` enum | `InterestPolicy` / Strategy classes (in the original plan); a string-keyed map | The plans differ only in data, not behavior. The enum prevents typing mistakes. |
+| Plan terms as data in the `PlanType` enum | Per-plan `InterestPolicy` / strategy classes (in the original plan); a string-keyed map | The plans differ only in data, not behavior. The enum prevents typing mistakes. |
+| One behavior-level `InterestCalculationStrategy`, with the legacy rule as `StandardInterestCalculation` *(revisits the earlier "no strategy" decision, at the developer's request)* | Keeping the rule inside `TimeDepositCalculator`; per-plan strategies; factories or registries | The README requires calculation extensibility: a new rule shape becomes a new class instead of an edit. Rounding stays in the calculator, so every strategy is rounded the legacy way. |
 | `PlanType.fromCode` returns `Optional` | `Enum.valueOf` | `valueOf` throws on unknown plans, which earned 0 before. |
 | `TimeDeposit` keeps `String planType` and has no `equals`/`hashCode` | Change the field type; add `equals` | It's a shared class: no breaking changes, and no change to how deposits compare. |
 | Code-first OpenAPI (springdoc) | Contract-first YAML + generator | Developer decision. |
@@ -170,7 +185,7 @@ Every result below was actually run during this work:
 - **Committed characterization tests:** `git diff` confirmed they were never changed by the refactoring or by the Spring Boot work.
 
 Spring Boot implementation:
-- **Full suite:** 61 tests, 0 failures: 43 characterization, 10 `PlanTypeTest`, 3 persistence adapter, 4 API, 1 demo migration.
+- **Full suite (after the strategy change):** 63 tests, 0 failures: 43 characterization, 10 `PlanTypeTest`, 2 strategy, 3 persistence adapter, 4 API, 1 demo migration.
 - **Query count (Hibernate SQL log):**
   - update path: 1 SELECT, then UPDATEs only for rows that changed, with no extra SELECT;
   - read path: 1 fetch-join SELECT.

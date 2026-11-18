@@ -52,6 +52,7 @@ mvn test        # Docker must be running
 | Test | What it covers |
 |---|---|
 | `TimeDepositCalculatorTest` (43), `PlanTypeTest` (10) | Legacy interest behavior: boundaries, exact rates, rounding, repeated updates. Unit tests, no Docker. |
+| `TimeDepositCalculatorStrategyTest` (2) | A custom interest rule can be plugged in, and its result is rounded like the standard rule's. |
 | `TimeDepositPersistenceAdapterTest` | JPA mapping against PostgreSQL, withdrawals loaded in one query, the `double` → `NUMERIC(19,2)` boundary |
 | `TimeDepositApiTest` | Both endpoints over HTTP: exact JSON, interest results, repeated POST, the OpenAPI document lists exactly two paths |
 | `DemoDataMigrationTest` | The dev-only demo data migrates cleanly (in its own database) |
@@ -60,13 +61,17 @@ mvn test        # Docker must be running
 A pragmatic hexagonal design. Dependencies point inward: `adapter → application → domain`.
 
 ```
-org.ikigaidigital                          domain: TimeDeposit, TimeDepositCalculator, PlanType, Withdrawal (framework-free)
+org.ikigaidigital                          domain: TimeDeposit, TimeDepositCalculator, PlanType, Withdrawal,
+                                           InterestCalculationStrategy, StandardInterestCalculation (framework-free)
 org.ikigaidigital.application              TimeDepositService (use cases), TimeDepositRepository (output port)
 org.ikigaidigital.adapter.in.web           TimeDepositController, response records, OpenAPI annotations
 org.ikigaidigital.adapter.out.persistence  JPA entities, Spring Data repository, TimeDepositPersistenceAdapter
 ```
 - **Schema:** Flyway owns it (`db/migration`); Hibernate only validates the mapping. Demo data lives separately in `db/demo` and is loaded only by the `dev` profile.
-- **Interest rules:** the plan-specific rates and eligibility windows are data in the `PlanType` enum. A plan with the same rule shape is one new enum line.
+- **Interest rules:**
+  - Plan-specific rates and eligibility windows are data in the `PlanType` enum, so a plan with the same rule shape is one new enum line.
+  - A different *calculation* rule (e.g. tiered rates) is a new `InterestCalculationStrategy`, passed to `new TimeDepositCalculator(strategy)`. It can delegate to `StandardInterestCalculation` for the plans it doesn't handle, so the existing classes stay unchanged.
+  - `TimeDepositCalculator` always does the rounding.
 
 ## Design decisions and assumptions
 The README leaves these open; each is a deliberate choice.

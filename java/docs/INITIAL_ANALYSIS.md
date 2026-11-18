@@ -268,12 +268,16 @@ Small steps, each a separate atomic commit with all tests green:
 | 5 | **Database:** JPA, Flyway, PostgreSQL; `V1` schema, dev-only demo data, `compose.yaml`, shared Testcontainers configuration. | Done (`4cbe0a2`) |
 | 6 | **Persistence adapter:** `Withdrawal`, entities, Spring Data repository, `TimeDepositRepository` port, adapter, with Testcontainers tests. | Done (`5b20e7a`) |
 | 7 | **Application service and REST API:** `TimeDepositService` (one `@Transactional` for the POST only), controller, response records, springdoc annotations, API test. | Done (`1bdb393`) |
-| 8 | **Finish:** `java/README.md` (run, Swagger usage, assumptions), documentation updates, dependency and dead-code review. | Done (uncommitted) |
+| 8 | **Finish:** `java/README.md` (run, Swagger usage, assumptions), documentation updates, dependency and dead-code review. | Done (`a7ee4e0`) |
+| 9 | **Interest calculation strategy** (README: "extensible to accommodate future complexities in interest calculations"): `InterestCalculationStrategy.calculateInterest(TimeDeposit)`; the legacy rule moved verbatim into `StandardInterestCalculation`; `TimeDepositCalculator` keeps orchestration and rounding; a new constructor `TimeDepositCalculator(InterestCalculationStrategy)`, while `new TimeDepositCalculator()` still uses the standard rule. | Done (uncommitted) |
 
 Design notes for step 3 (decided by the author):
 - **Plan types are the `PlanType` enum** (decided by the author, to avoid typing mistakes). `TimeDeposit` keeps its `String planType` (shared API); `PlanType.fromCode` matches case-sensitively and returns `Optional.empty()` for unknown codes instead of throwing like `Enum.valueOf`, which keeps R2 and A10.
 - **Interest window per plan, as data in `PlanType`:** `interestFreeDays` (30 for basic/student, 45 for premium) and `lastInterestDay` (365 for student, unlimited otherwise). This keeps the README's "for any existing plans" open for future plans with a different window.
-- **No strategy/`InterestPolicy` interface:** the plans differ only in data, not in behavior. Introduce behavior on the enum only when a rule of a different shape appears (e.g. balance tiers).
+- **No per-plan `InterestPolicy` classes:** the plans differ only in data, not in behavior.
+- **Revisited in step 9 (developer decision):** one *behavior-level* extension point, `InterestCalculationStrategy`, for future calculation rules (e.g. tiered rates, a different accrual method), because the README explicitly requires extensibility of the calculation.
+  - Plan data stays in `PlanType`. A new plan with the same rule shape is one enum line; a new rule shape is a new strategy, which can delegate to `StandardInterestCalculation`.
+  - Not added: per-plan strategies, factories, registries.
 
 ---
 
@@ -284,7 +288,9 @@ Hexagonal architecture, kept proportionate:
 ```
 org.ikigaidigital
 ├── TimeDeposit, TimeDepositCalculator,     ← domain; package and class names unchanged (shared)
-│   PlanType, Withdrawal record
+│   PlanType, Withdrawal record,
+│   InterestCalculationStrategy,            ← extension point for calculation rules
+│   StandardInterestCalculation             ← the legacy rule (default)
 ├── application/                             ← TimeDepositService (both use cases), TimeDepositRepository (output port),
 │                                              TimeDepositWithWithdrawals (read record)
 └── adapter/
@@ -293,7 +299,7 @@ org.ikigaidigital
 ```
 
 - **Domain:** no dependency on any framework. `TimeDeposit` and `TimeDepositCalculator` keep their package, class names and public API.
-- **Interfaces:** only where there is a concrete benefit: the output port `TimeDepositRepository` (dependency inversion toward the database) only. Plan-specific rules are data in the `PlanType` enum, so no interest-policy interface is needed. The use cases are plain service classes; input-port interfaces would add nothing here.
+- **Interfaces:** only where there is a concrete benefit: the output port `TimeDepositRepository` (dependency inversion toward the database), and `InterestCalculationStrategy` (README-required extensibility of the calculation). Plan-specific values stay data in the `PlanType` enum. The use cases are plain service classes; input-port interfaces would add nothing here.
 - **Read model:** GET returns a `TimeDeposit` together with its `List<Withdrawal>`, mapped to the API DTO. `TimeDeposit` stays untouched.
 - **Stack:** Spring Boot 3.5.16 (Java 17), Spring Data JPA, springdoc-openapi 2.10.0, PostgreSQL 17, Flyway, Testcontainers (PostgreSQL), JUnit 5, AssertJ. All versions except springdoc are managed by the Spring Boot BOM.
 - **Money:** the legacy `double` calculation is preserved. `BigDecimal` is used at the API and persistence boundaries.
@@ -313,3 +319,4 @@ org.ikigaidigital
    - `spring.jpa.open-in-view=false`.
    - Not split into a read outside the transaction and a write inside it: that would add stale-read risk and lose atomicity.
 6. **No locking:** concurrency control is outside the README (see A13).
+7. **Interest calculation strategy:** one interface (`calculateInterest`) with one standard implementation; rounding stays in `TimeDepositCalculator`; no per-plan strategies.

@@ -3,52 +3,54 @@ package org.ikigaidigital;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Applies one month of interest to time deposits according to their {@link PlanType}.
+ * Applies interest to time deposits.
  *
  * <p>
- * Annual rates are applied monthly ({@code rate / 12}) once a plan's interest-free days have passed. Only the interest is rounded (to two decimal
- * places, {@link RoundingMode#HALF_UP}); the balance itself is never rounded.
+ * The interest rule comes from an {@link InterestCalculationStrategy}; by default the {@link StandardInterestCalculation} (one month at the plan's
+ * annual rate). This class rounds the interest (to two decimal places, {@link RoundingMode#HALF_UP}) and adds it to the balance; the balance itself
+ * is never rounded.
  */
 public class TimeDepositCalculator {
 
-    private static final int MONTHS_PER_YEAR = 12;
     private static final int DECIMAL_PLACES = 2;
 
+    private final InterestCalculationStrategy interestCalculation;
+
     /**
-     * Adds one month of interest to the balance of every given deposit, in place.
+     * Creates a calculator with the {@link StandardInterestCalculation}.
+     */
+    public TimeDepositCalculator() {
+        this(new StandardInterestCalculation());
+    }
+
+    /**
+     * Creates a calculator with a custom interest rule.
+     *
+     * @param interestCalculation
+     *            the interest rule to apply
+     */
+    public TimeDepositCalculator(InterestCalculationStrategy interestCalculation) {
+        this.interestCalculation = Objects.requireNonNull(interestCalculation, "interestCalculation");
+    }
+
+    /**
+     * Adds interest to the balance of every given deposit, in place.
      *
      * <p>
-     * Not idempotent: every call adds another month of interest, and {@code days} is not changed. Unknown plan types (matched case-sensitively) earn
-     * no interest.
+     * Not idempotent: every call adds interest again, and {@code days} is not changed. With the standard rule, every call adds one month of
+     * interest and unknown plan types (matched case-sensitively) earn none.
      *
      * @param deposits
      *            the deposits to update; each one's balance is replaced
      */
     public void updateBalance(List<TimeDeposit> deposits) {
         for (TimeDeposit deposit : deposits) {
-            double interest = roundToTwoDecimals(monthlyInterest(deposit));
+            double interest = roundToTwoDecimals(interestCalculation.calculateInterest(deposit));
             deposit.setBalance(deposit.getBalance() + interest);
         }
-    }
-
-    private static double monthlyInterest(TimeDeposit deposit) {
-        return PlanType.fromCode(deposit.getPlanType())
-                .filter(planType -> planType.earnsInterestOn(deposit.getDays()))
-                .map(planType -> monthlyInterest(deposit.getBalance(), planType.annualRate()))
-                .orElse(0.0);
-    }
-
-    /**
-     * Calculates one month's interest using the annual interest rate.
-     *
-     * <p>
-     * The original operation order (balance * rate, then / 12) is preserved because floating-point arithmetic is not associative. Reordering the
-     * operations may introduce different rounding errors, potentially affecting the final interest amount after rounding to two decimals.
-     */
-    private static double monthlyInterest(double balance, double annualRate) {
-        return balance * annualRate / MONTHS_PER_YEAR;
     }
 
     // new BigDecimal(double) on purpose: it rounds the exact binary value (0.015 -> 0.01), unlike BigDecimal.valueOf.
