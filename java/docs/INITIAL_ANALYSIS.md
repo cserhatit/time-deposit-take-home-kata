@@ -260,18 +260,19 @@ Small steps, each a separate atomic commit with all tests green:
 
 | # | Step | Status |
 |---|---|---|
-| 1 | **Characterization tests** (§5.1), replacing the test that checked nothing. No production change. | Done, not yet committed |
-| 2 | **Clean up `updateBalance` internally:** for-each loop, clear names, named constants. Same signature, same arithmetic. | Planned |
-| 3 | **Interest policies (the extensibility point):** `InterestPolicy` with `double monthlyInterest(TimeDeposit)`; `Basic`/`Student`/`PremiumInterestPolicy`, each owning its full eligibility check (including the 30-day rule) and the exact `balance * rate / 12` expression. The calculator looks the policy up in a `Map<PlanType, InterestPolicy>`, with zero interest as the default. Rounding stays in the calculator, unchanged. | Planned |
+| 1 | **Characterization tests** (§5.1), replacing the test that checked nothing. No production change. | Done (`a9f0265`) |
+| 2 | **Clean up `updateBalance` internally:** for-each loop, clear names, named constants. Same signature, same arithmetic. | Done (`e87cd95`) |
+| 3 | **Plan terms in the `PlanType` enum (the extensibility point)** — *replaces the originally planned `InterestPolicy` classes.* Each constant holds its code, annual rate, interest-free days and last interest day; `PlanType.earnsInterestOn(days)` owns the eligibility window. A new plan with the same rule shape is one enum line; the calculator is unchanged. Formula and rounding stay in the calculator, unchanged. | Done (uncommitted) |
 | 4 | **Spring Boot setup** with a Flyway schema and seed, and PostgreSQL. No endpoints yet. | Planned |
 | 5 | **Persistence adapter:** Spring Data JPA entities and repositories behind the `TimeDepositRepository` interface (output port), with Testcontainers tests. | Planned |
 | 6 | **Application services:** `UpdateAllBalancesService` (load → `updateBalance` → save, in one transaction) and `GetAllTimeDepositsService`. | Planned |
 | 7 | **REST controller with springdoc annotations** (code-first OpenAPI, Swagger UI) for the two endpoints, with web-layer tests. | Planned |
 | 8 | **Finish:** end-to-end test, dependency and dead-code review, README (Swagger usage, assumptions), AI usage documentation. | Planned |
 
-Design notes for step 3:
-- **Plan types are the `PlanType` enum** (decided by the author, to avoid typing mistakes). `TimeDeposit` keeps its `String planType` (shared API); `PlanType.fromCode` matches case-sensitively and returns `Optional.empty()` for unknown codes instead of throwing like `Enum.valueOf`, which keeps R2 and A10. Policies are keyed by `PlanType`.
-- **30-day rule inside each policy** (decided by the author): this repeats a small check. In return, a future plan can have a different starting window, which the README's wording "for any existing plans" hints at.
+Design notes for step 3 (decided by the author):
+- **Plan types are the `PlanType` enum** (decided by the author, to avoid typing mistakes). `TimeDeposit` keeps its `String planType` (shared API); `PlanType.fromCode` matches case-sensitively and returns `Optional.empty()` for unknown codes instead of throwing like `Enum.valueOf`, which keeps R2 and A10.
+- **Interest window per plan, as data in `PlanType`:** `interestFreeDays` (30 for basic/student, 45 for premium) and `lastInterestDay` (365 for student, unlimited otherwise). This keeps the README's "for any existing plans" open for future plans with a different window.
+- **No strategy/`InterestPolicy` interface:** the plans differ only in data, not in behavior. Introduce behavior on the enum only when a rule of a different shape appears (e.g. balance tiers).
 
 ---
 
@@ -281,8 +282,8 @@ Hexagonal architecture, kept proportionate:
 
 ```
 org.ikigaidigital
-├── TimeDeposit, TimeDepositCalculator      ← domain; package and class names unchanged (shared)
-├── domain/interest/                         ← InterestPolicy + three implementations; Withdrawal record
+├── TimeDeposit, TimeDepositCalculator,     ← domain; package and class names unchanged (shared)
+│   PlanType, Withdrawal record
 ├── application/                             ← UpdateAllBalancesService, GetAllTimeDepositsService,
 │                                              TimeDepositRepository (output port interface)
 └── adapter/
@@ -291,7 +292,7 @@ org.ikigaidigital
 ```
 
 - **Domain:** no dependency on any framework. `TimeDeposit` and `TimeDepositCalculator` keep their package, class names and public API.
-- **Interfaces:** only where there is a concrete benefit: the output port `TimeDepositRepository` (dependency inversion toward the database) and `InterestPolicy` (extensibility). The use cases are plain service classes; input-port interfaces would add nothing here.
+- **Interfaces:** only where there is a concrete benefit: the output port `TimeDepositRepository` (dependency inversion toward the database) only. Plan-specific rules are data in the `PlanType` enum, so no interest-policy interface is needed. The use cases are plain service classes; input-port interfaces would add nothing here.
 - **Read model:** GET returns a `TimeDeposit` together with its `List<Withdrawal>`, mapped to the API DTO. `TimeDeposit` stays untouched.
 - **Stack:** Spring Boot 3.x (Java 17), Spring Data JPA, springdoc-openapi, PostgreSQL, Flyway, Testcontainers (PostgreSQL), JUnit 5, AssertJ. Exact versions will be pinned when `pom.xml` is changed.
 - **Money:** the legacy `double` calculation is preserved. `BigDecimal` is used at the API and persistence boundaries.
@@ -303,5 +304,5 @@ org.ikigaidigital
    - Flyway owns the schema; Hibernate only validates it (`ddl-auto=validate`).
    - The camelCase names are mapped explicitly.
    - Withdrawals are fetched together with their deposits (fetch join / `@EntityGraph`), to avoid one query per deposit (the N+1 problem).
-3. **The 30-day rule** lives inside each interest policy.
+3. **Interest window per plan:** interest-free days and last interest day are fields of `PlanType` (no policy classes).
 4. **Update endpoint:** `POST /time-deposits/balance-updates` → `204 No Content`.

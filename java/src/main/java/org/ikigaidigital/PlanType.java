@@ -39,21 +39,14 @@ public enum PlanType {
     }
 
     /**
-     * Returns the number of days from the start during which the plan earns no interest.
+     * Tells whether a deposit of the given age earns interest under this plan: after its interest-free days
+     * and up to and including its last interest day.
      *
-     * @return the number of interest-free days; interest starts on the day after
+     * @param days the age of the deposit in days
+     * @return {@code true} if the deposit earns interest on that day
      */
-    public int interestFreeDays() {
-        return interestFreeDays;
-    }
-
-    /**
-     * Returns the last day on which the plan still earns interest.
-     *
-     * @return the last interest-earning day, or {@link Integer#MAX_VALUE} if interest never stops
-     */
-    public int lastInterestDay() {
-        return lastInterestDay;
+    public boolean earnsInterestOn(int days) {
+        return days > interestFreeDays && days <= lastInterestDay;
     }
 
     /**

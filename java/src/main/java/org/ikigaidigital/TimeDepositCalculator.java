@@ -35,13 +35,9 @@ public class TimeDepositCalculator {
 
     private static double monthlyInterest(TimeDeposit deposit) {
         return PlanType.fromCode(deposit.getPlanType())
-                .filter(planType -> earnsInterest(planType, deposit.getDays()))
+                .filter(planType -> planType.earnsInterestOn(deposit.getDays()))
                 .map(planType -> monthlyInterest(deposit.getBalance(), planType.annualRate()))
                 .orElse(0.0);
-    }
-
-    private static boolean earnsInterest(PlanType planType, int days) {
-        return days > planType.interestFreeDays() && days <= planType.lastInterestDay();
     }
 
     // Operation order (balance * rate, then / 12) is kept from the original; reordering can change the double result.
