@@ -1,5 +1,7 @@
 package org.ikigaidigital;
 
+import org.ikigaidigital.calculation.standard.StandardInterestCalculation;
+
 /**
  * Extension point for interest calculation rules.
  *

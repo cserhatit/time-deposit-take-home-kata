@@ -16,7 +16,14 @@ import java.util.List;
 /**
  * The two REST endpoints required by the README.
  *
- * <p>Verbs and paths are not specified by the README; these are documented assumptions.
+ * <p>The README specifies neither verbs nor paths. Assumptions:
+ * <ul>
+ * <li>{@code POST /time-deposits/balance-updates}: the update changes state and is not idempotent (every call
+ * applies another month), so POST, not PUT. It returns nothing, so {@code 204 No Content}.</li>
+ * <li>{@code GET /time-deposits}: a read-only collection resource, {@code 200 OK}.</li>
+ * <li>"Exactly two endpoints" counts API endpoints: springdoc's {@code /v3/api-docs} and {@code /swagger-ui}
+ * document them (the README asks for a Swagger contract), and Spring Boot's {@code /error} is framework default.</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/time-deposits")

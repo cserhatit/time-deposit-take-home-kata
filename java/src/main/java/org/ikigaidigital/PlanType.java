@@ -6,6 +6,16 @@ import java.util.Optional;
 /**
  * The supported time deposit plan types, the exact codes used for them in {@link TimeDeposit#getPlanType()},
  * and their interest terms.
+ *
+ * <p>Where the README is ambiguous, the original {@code TimeDepositCalculator} (which the README says works
+ * correctly) is the source of truth, pinned by the characterization tests:
+ * <ul>
+ * <li>Rates are annual and applied monthly ({@code rate / 12}); the original divided by 12.</li>
+ * <li>"No interest for the first 30 days" / "starts after 45 days": strictly greater, so interest from day 31 /
+ * day 46; the original checked {@code days > 30} and {@code days > 45}.</li>
+ * <li>Student "no interest after 1 year": 1 year = 365 days, interest up to and including day 365; the original
+ * checked {@code days < 366}.</li>
+ * </ul>
  */
 public enum PlanType {
     BASIC("basic", 0.01, 30),
