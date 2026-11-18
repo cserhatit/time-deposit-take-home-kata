@@ -1,0 +1,15 @@
+# Local PostgreSQL for `mvn spring-boot:run`; credentials match the defaults in application.properties.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: timedeposits
+      POSTGRES_USER: timedeposits
+      POSTGRES_PASSWORD: timedeposits
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
