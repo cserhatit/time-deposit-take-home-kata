@@ -8,8 +8,8 @@ import java.util.List;
  * Applies one month of interest to time deposits according to their {@link PlanType}.
  *
  * <p>
- * Annual rates are applied monthly ({@code rate / 12}) once a plan's interest-free days have passed. Only the interest is rounded (to two decimal places,
- * {@link RoundingMode#HALF_UP}); the balance itself is never rounded.
+ * Annual rates are applied monthly ({@code rate / 12}) once a plan's interest-free days have passed. Only the interest is rounded (to two decimal
+ * places, {@link RoundingMode#HALF_UP}); the balance itself is never rounded.
  */
 public class TimeDepositCalculator {
 
@@ -40,7 +40,13 @@ public class TimeDepositCalculator {
                 .orElse(0.0);
     }
 
-    // Operation order (balance * rate, then / 12) is kept from the original; reordering can change the double result.
+    /**
+     * Calculates one month's interest using the annual interest rate.
+     *
+     * <p>
+     * The original operation order (balance * rate, then / 12) is preserved because floating-point arithmetic is not associative. Reordering the
+     * operations may introduce different rounding errors, potentially affecting the final interest amount after rounding to two decimals.
+     */
     private static double monthlyInterest(double balance, double annualRate) {
         return balance * annualRate / MONTHS_PER_YEAR;
     }
