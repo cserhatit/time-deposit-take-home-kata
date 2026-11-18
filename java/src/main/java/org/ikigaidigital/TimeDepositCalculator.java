@@ -4,27 +4,53 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 
+/**
+ * Applies one month of interest to time deposits according to their {@link PlanType}.
+ *
+ * <p>
+ * Annual rates are applied monthly ({@code rate / 12}) once a plan's interest-free days have passed. Only the interest is rounded (to two decimal places,
+ * {@link RoundingMode#HALF_UP}); the balance itself is never rounded.
+ */
 public class TimeDepositCalculator {
-    public void updateBalance(List<TimeDeposit> xs) {
-        for (int i = 0; i < xs.size(); i++) {
-            double interest = 0;
 
-            if (xs.get(i).getDays() > 30) {
-                if (xs.get(i).getPlanType().equals("student")) {
-                    if (xs.get(i).getDays() < 366) {
-                        interest += xs.get(i).getBalance() * 0.03 / 12;
-                    }
-                } else if (xs.get(i).getPlanType().equals("premium")) {
-                    if (xs.get(i).getDays() > 45) {
-                        interest += xs.get(i).getBalance() * 0.05 / 12;
-                    }
-                } else if (xs.get(i).getPlanType().equals("basic")) {
-                    interest += xs.get(i).getBalance() * 0.01 / 12;
-                }
-            }
+    private static final int MONTHS_PER_YEAR = 12;
+    private static final int DECIMAL_PLACES = 2;
 
-            double a2d = xs.get(i).getBalance() + (new BigDecimal(interest).setScale(2, RoundingMode.HALF_UP)).doubleValue();
-            xs.get(i).setBalance(a2d);
+    /**
+     * Adds one month of interest to the balance of every given deposit, in place.
+     *
+     * <p>
+     * Not idempotent: every call adds another month of interest, and {@code days} is not changed. Unknown plan types (matched case-sensitively) earn
+     * no interest.
+     *
+     * @param deposits
+     *            the deposits to update; each one's balance is replaced
+     */
+    public void updateBalance(List<TimeDeposit> deposits) {
+        for (TimeDeposit deposit : deposits) {
+            double interest = roundToTwoDecimals(monthlyInterest(deposit));
+            deposit.setBalance(deposit.getBalance() + interest);
         }
+    }
+
+    private static double monthlyInterest(TimeDeposit deposit) {
+        return PlanType.fromCode(deposit.getPlanType())
+                .filter(planType -> earnsInterest(planType, deposit.getDays()))
+                .map(planType -> monthlyInterest(deposit.getBalance(), planType.annualRate()))
+                .orElse(0.0);
+    }
+
+    private static boolean earnsInterest(PlanType planType, int days) {
+        return days > planType.interestFreeDays() && days <= planType.lastInterestDay();
+    }
+
+    // Operation order (balance * rate, then / 12) is kept from the original; reordering can change the double result.
+    private static double monthlyInterest(double balance, double annualRate) {
+        return balance * annualRate / MONTHS_PER_YEAR;
+    }
+
+    // new BigDecimal(double) on purpose: it rounds the exact binary value (0.015 -> 0.01), unlike BigDecimal.valueOf.
+    private static double roundToTwoDecimals(double amount) {
+        return new BigDecimal(amount).setScale(DECIMAL_PLACES, RoundingMode.HALF_UP).doubleValue();
     }
 }

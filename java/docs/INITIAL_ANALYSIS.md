@@ -156,13 +156,13 @@ These are the rules the code actually applies today. They are the behavior to pr
 | S7 | Withdrawals play no part: `TimeDeposit` has no withdrawals. | [C] |
 | S8 | The README example `basic`, 1234567.00, 45 days → 1235595.81. | [T] `updatesTheOriginalExampleDeposit` |
 
-### 3.4 Invalid input — confirmed by reading, intentionally not tested
-The README says invalid-input handling is not required, so these are documented only.
+### 3.4 Invalid input
+The README says invalid-input handling is not required, so these are documented only and not preserved as a compatibility requirement.
 
 | # | Input | Behavior | Evidence |
 |---|---|---|---|
 | N1 | `null` balance | Always throws `NullPointerException` (unboxing on the rounding line). | [C] |
-| N2 | `null` planType | Throws NPE only when `days > 30`, because the 30-day check runs before any plan comparison. | [C] |
+| N2 | `null` planType | Original: throws NPE only when `days > 30`, because the 30-day check ran before any plan comparison. **Changed during refactoring** (interest-free days moved into `PlanType`, so the plan is looked up first): now always throws NPE. Accepted by the author, because the README says invalid input and exceptions need not be handled; valid input is unaffected (2,000,000 random cases bit-identical). | [C] |
 | N3 | `null` list | Throws NPE. | [C] |
 
 ---
@@ -262,7 +262,7 @@ Small steps, each a separate atomic commit with all tests green:
 |---|---|---|
 | 1 | **Characterization tests** (§5.1), replacing the test that checked nothing. No production change. | Done, not yet committed |
 | 2 | **Clean up `updateBalance` internally:** for-each loop, clear names, named constants. Same signature, same arithmetic. | Planned |
-| 3 | **Interest policies (the extensibility point):** `InterestPolicy` with `double monthlyInterest(TimeDeposit)`; `Basic`/`Student`/`PremiumInterestPolicy`, each owning its full eligibility check (including the 30-day rule) and the exact `balance * rate / 12` expression. The calculator looks the policy up in a `Map<String, InterestPolicy>`, with zero interest as the default. Rounding stays in the calculator, unchanged. | Planned |
+| 3 | **Interest policies (the extensibility point):** `InterestPolicy` with `double monthlyInterest(TimeDeposit)`; `Basic`/`Student`/`PremiumInterestPolicy`, each owning its full eligibility check (including the 30-day rule) and the exact `balance * rate / 12` expression. The calculator looks the policy up in a `Map<PlanType, InterestPolicy>`, with zero interest as the default. Rounding stays in the calculator, unchanged. | Planned |
 | 4 | **Spring Boot setup** with a Flyway schema and seed, and PostgreSQL. No endpoints yet. | Planned |
 | 5 | **Persistence adapter:** Spring Data JPA entities and repositories behind the `TimeDepositRepository` interface (output port), with Testcontainers tests. | Planned |
 | 6 | **Application services:** `UpdateAllBalancesService` (load → `updateBalance` → save, in one transaction) and `GetAllTimeDepositsService`. | Planned |
@@ -270,7 +270,7 @@ Small steps, each a separate atomic commit with all tests green:
 | 8 | **Finish:** end-to-end test, dependency and dead-code review, README (Swagger usage, assumptions), AI usage documentation. | Planned |
 
 Design notes for step 3:
-- **Why a string-keyed map and not an enum:** `Enum.valueOf` throws on unknown plans, which would change R2 and A10.
+- **Plan types are the `PlanType` enum** (decided by the author, to avoid typing mistakes). `TimeDeposit` keeps its `String planType` (shared API); `PlanType.fromCode` matches case-sensitively and returns `Optional.empty()` for unknown codes instead of throwing like `Enum.valueOf`, which keeps R2 and A10. Policies are keyed by `PlanType`.
 - **30-day rule inside each policy** (decided by the author): this repeats a small check. In return, a future plan can have a different starting window, which the README's wording "for any existing plans" hints at.
 
 ---
