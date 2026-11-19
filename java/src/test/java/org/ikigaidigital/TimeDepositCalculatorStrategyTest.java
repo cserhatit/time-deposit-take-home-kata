@@ -1,7 +1,7 @@
 package org.ikigaidigital;
 
 import org.ikigaidigital.calculation.InterestCalculationStrategy;
-import org.ikigaidigital.calculation.standard.StandardInterestCalculation;
+import org.ikigaidigital.calculation.standard.MonthlyInterestCalculation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Shows that {@link TimeDepositCalculator} accepts a custom {@link InterestCalculationStrategy}: new interest rules
- * can be added without changing the calculator or the {@link StandardInterestCalculation}.
+ * can be added without changing the calculator or the {@link MonthlyInterestCalculation}.
  */
 class TimeDepositCalculatorStrategyTest {
 
@@ -28,7 +28,7 @@ class TimeDepositCalculatorStrategyTest {
     @Test
     void aNewRuleCanExtendTheStandardCalculationWithoutChangingIt() {
         // Hypothetical "gold" plan, defined only in this test: 2% a year; every other plan keeps the standard rule.
-        StandardInterestCalculation standard = new StandardInterestCalculation();
+        MonthlyInterestCalculation standard = new MonthlyInterestCalculation();
         InterestCalculationStrategy withGoldPlan = deposit -> "gold".equals(deposit.getPlanType())
                 ? deposit.getBalance() * 0.02 / 12
                 : standard.calculateInterest(deposit);

@@ -6,13 +6,13 @@ import java.util.List;
 import java.util.Objects;
 
 import org.ikigaidigital.calculation.InterestCalculationStrategy;
-import org.ikigaidigital.calculation.standard.StandardInterestCalculation;
+import org.ikigaidigital.calculation.standard.MonthlyInterestCalculation;
 
 /**
  * Applies interest to time deposits.
  *
  * <p>
- * The interest rule comes from an {@link InterestCalculationStrategy}; by default the {@link StandardInterestCalculation} (one month at the plan's
+ * The interest rule comes from an {@link InterestCalculationStrategy}; by default the {@link MonthlyInterestCalculation} (one month at the plan's
  * annual rate). This class rounds the interest (to two decimal places, {@link RoundingMode#HALF_UP}) and adds it to the balance; the balance itself
  * is never rounded.
  */
@@ -23,10 +23,10 @@ public class TimeDepositCalculator {
     private final InterestCalculationStrategy interestCalculation;
 
     /**
-     * Creates a calculator with the {@link StandardInterestCalculation}.
+     * Creates a calculator with the {@link MonthlyInterestCalculation}.
      */
     public TimeDepositCalculator() {
-        this(new StandardInterestCalculation());
+        this(new MonthlyInterestCalculation());
     }
 
     /**

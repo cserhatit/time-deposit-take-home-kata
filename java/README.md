@@ -61,8 +61,9 @@ mvn test        # Docker must be running
 A pragmatic hexagonal design. Dependencies point inward: `adapter → application → domain`.
 
 ```
-org.ikigaidigital                          domain: TimeDeposit, TimeDepositCalculator, PlanType, Withdrawal,
-                                           InterestCalculationStrategy, StandardInterestCalculation (framework-free)
+org.ikigaidigital                          domain: TimeDeposit, TimeDepositCalculator, PlanType, Withdrawal (framework-free)
+org.ikigaidigital.calculation              InterestCalculationStrategy (extension point for calculation rules)
+org.ikigaidigital.calculation.standard     MonthlyInterestCalculation (the legacy rule, default)
 org.ikigaidigital.application              TimeDepositService (use cases), TimeDepositRepository (output port)
 org.ikigaidigital.adapter.in.web           TimeDepositController, response records, OpenAPI annotations
 org.ikigaidigital.adapter.out.persistence  JPA entities, Spring Data repository, TimeDepositPersistenceAdapter
@@ -70,7 +71,7 @@ org.ikigaidigital.adapter.out.persistence  JPA entities, Spring Data repository,
 - **Schema:** Flyway owns it (`db/migration`); Hibernate only validates the mapping. Demo data lives separately in `db/demo` and is loaded only by the `dev` profile.
 - **Interest rules:**
   - Plan-specific rates and eligibility windows are data in the `PlanType` enum, so a plan with the same rule shape is one new enum line.
-  - A different *calculation* rule (e.g. tiered rates) is a new `InterestCalculationStrategy`, passed to `new TimeDepositCalculator(strategy)`. It can delegate to `StandardInterestCalculation` for the plans it doesn't handle, so the existing classes stay unchanged.
+  - A different *calculation* rule (e.g. tiered rates) is a new `InterestCalculationStrategy`, passed to `new TimeDepositCalculator(strategy)`. It can delegate to `MonthlyInterestCalculation` for the plans it doesn't handle, so the existing classes stay unchanged.
   - `TimeDepositCalculator` always does the rounding.
 
 ## Design decisions and assumptions

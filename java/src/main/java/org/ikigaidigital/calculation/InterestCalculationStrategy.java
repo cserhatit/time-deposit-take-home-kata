@@ -2,14 +2,14 @@ package org.ikigaidigital.calculation;
 
 import org.ikigaidigital.TimeDeposit;
 import org.ikigaidigital.TimeDepositCalculator;
-import org.ikigaidigital.calculation.standard.StandardInterestCalculation;
+import org.ikigaidigital.calculation.standard.MonthlyInterestCalculation;
 
 /**
  * Extension point for interest calculation rules.
  *
  * <p>A new rule (e.g. tiered rates or a different accrual method) is added as a new implementation, without
- * changing {@link TimeDepositCalculator} or {@link StandardInterestCalculation}. An implementation may delegate
- * to {@link StandardInterestCalculation} for the deposits it does not handle itself.
+ * changing {@link TimeDepositCalculator} or {@link MonthlyInterestCalculation}. An implementation may delegate
+ * to {@link MonthlyInterestCalculation} for the deposits it does not handle itself.
  *
  * <p>{@link TimeDepositCalculator} rounds the result and applies it to the balance; implementations return the
  * unrounded amount.

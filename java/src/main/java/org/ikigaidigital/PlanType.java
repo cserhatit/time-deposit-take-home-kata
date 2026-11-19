@@ -20,7 +20,8 @@ import java.util.Optional;
 public enum PlanType {
     BASIC("basic", 0.01, 30),
     STUDENT("student", 0.03, 30, 365),
-    PREMIUM("premium", 0.05, 45);
+    PREMIUM("premium", 0.05, 45),
+    ;
 
     private final String code;
     private final double annualRate;

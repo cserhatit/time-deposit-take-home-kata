@@ -269,14 +269,14 @@ Small steps, each a separate atomic commit with all tests green:
 | 6 | **Persistence adapter:** `Withdrawal`, entities, Spring Data repository, `TimeDepositRepository` port, adapter, with Testcontainers tests. | Done (`5b20e7a`) |
 | 7 | **Application service and REST API:** `TimeDepositService` (one `@Transactional` for the POST only), controller, response records, springdoc annotations, API test. | Done (`1bdb393`) |
 | 8 | **Finish:** `java/README.md` (run, Swagger usage, assumptions), documentation updates, dependency and dead-code review. | Done (`a7ee4e0`) |
-| 9 | **Interest calculation strategy** (README: "extensible to accommodate future complexities in interest calculations"): `InterestCalculationStrategy.calculateInterest(TimeDeposit)`; the legacy rule moved verbatim into `StandardInterestCalculation`; `TimeDepositCalculator` keeps orchestration and rounding; a new constructor `TimeDepositCalculator(InterestCalculationStrategy)`, while `new TimeDepositCalculator()` still uses the standard rule. | Done (`33d853e`) |
+| 9 | **Interest calculation strategy** (README: "extensible to accommodate future complexities in interest calculations"): `InterestCalculationStrategy.calculateInterest(TimeDeposit)`; the legacy rule moved verbatim into `MonthlyInterestCalculation`; `TimeDepositCalculator` keeps orchestration and rounding; a new constructor `TimeDepositCalculator(InterestCalculationStrategy)`, while `new TimeDepositCalculator()` still uses the standard rule. | Done (`33d853e`) |
 
 Design notes for step 3 (decided by the author):
 - **Plan types are the `PlanType` enum** (decided by the author, to avoid typing mistakes). `TimeDeposit` keeps its `String planType` (shared API); `PlanType.fromCode` matches case-sensitively and returns `Optional.empty()` for unknown codes instead of throwing like `Enum.valueOf`, which keeps R2 and A10.
 - **Interest window per plan, as data in `PlanType`:** `interestFreeDays` (30 for basic/student, 45 for premium) and `lastInterestDay` (365 for student, unlimited otherwise). This keeps the README's "for any existing plans" open for future plans with a different window.
 - **No per-plan `InterestPolicy` classes:** the plans differ only in data, not in behavior.
 - **Revisited in step 9 (developer decision):** one *behavior-level* extension point, `InterestCalculationStrategy`, for future calculation rules (e.g. tiered rates, a different accrual method), because the README explicitly requires extensibility of the calculation.
-  - Plan data stays in `PlanType`. A new plan with the same rule shape is one enum line; a new rule shape is a new strategy, which can delegate to `StandardInterestCalculation`.
+  - Plan data stays in `PlanType`. A new plan with the same rule shape is one enum line; a new rule shape is a new strategy, which can delegate to `MonthlyInterestCalculation`.
   - Not added: per-plan strategies, factories, registries.
 
 ---
@@ -288,9 +288,9 @@ Hexagonal architecture, kept proportionate:
 ```
 org.ikigaidigital
 ├── TimeDeposit, TimeDepositCalculator,     ← domain; package and class names unchanged (shared)
-│   PlanType, Withdrawal record,
-│   InterestCalculationStrategy,            ← extension point for calculation rules
-│   StandardInterestCalculation             ← the legacy rule (default)
+│   PlanType, Withdrawal record
+├── calculation/                             ← InterestCalculationStrategy (extension point for calculation rules)
+│   └── standard/                            ← MonthlyInterestCalculation (the legacy rule, default)
 ├── application/                             ← TimeDepositService (both use cases), TimeDepositRepository (output port),
 │                                              TimeDepositWithWithdrawals (read record)
 └── adapter/

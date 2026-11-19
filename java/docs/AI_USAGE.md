@@ -54,7 +54,7 @@ The assistant never commits.
 | Persistence | Implement plan step 3 | Entities, port, adapter, adapter tests | `5b20e7a` |
 | REST API | Implement plan step 4 | Service, controller, response records, API test | `1bdb393` |
 | Finish | Implement plan step 5 | `java/README.md`, documentation updates, dependency review | `a7ee4e0` |
-| Calculation extensibility | Review enum vs. strategy; add a minimal strategy extension point without changing behavior; developer adjustments: method name `calculateInterest`, the "gold" example only in tests | `InterestCalculationStrategy`, `StandardInterestCalculation`, `TimeDepositCalculatorStrategyTest` | `33d853e` |
+| Calculation extensibility | Review enum vs. strategy; add a minimal strategy extension point without changing behavior; developer adjustments: method name `calculateInterest`, the "gold" example only in tests | `InterestCalculationStrategy`, `MonthlyInterestCalculation`, `TimeDepositCalculatorStrategyTest` | `33d853e` |
 
 ## 3. AI-Assisted Work
 
@@ -131,7 +131,7 @@ The assistant implemented the plan in steps; the developer committed each step a
 ### 3.7 Interest calculation strategy
 - **Review:** the enum varies plan *data*; the strategy varies calculation *behavior*. The gain is narrow but real, and it meets the README's extensibility requirement.
 - **Change:**
-  - the legacy rule moved verbatim into `StandardInterestCalculation`;
+  - the legacy rule moved verbatim into `MonthlyInterestCalculation` (first named `StandardInterestCalculation`; renamed by the developer);
   - `TimeDepositCalculator` keeps the loop and the `new BigDecimal(double)` / `HALF_UP` rounding;
   - an added constructor accepts a strategy, and the no-argument constructor still uses the standard rule.
 - **Developer adjustments:** the method is named `calculateInterest`; the hypothetical "gold" plan exists only in a test.
@@ -148,7 +148,7 @@ The assistant implemented the plan in steps; the developer committed each step a
 | Keep `new BigDecimal(double)` | `BigDecimal.valueOf(double)` | Changes legacy rounding (e.g. 18.00 basic). |
 | Keep `balance * rate / 12` and the `double` arithmetic | `balance * (rate / 12)`; `BigDecimal` throughout | The README requires unchanged behavior. Reordering *may* change results (not shown by a test). |
 | Plan terms as data in the `PlanType` enum | Per-plan `InterestPolicy` / strategy classes (in the original plan); a string-keyed map | The plans differ only in data, not behavior. The enum prevents typing mistakes. |
-| One behavior-level `InterestCalculationStrategy`, with the legacy rule as `StandardInterestCalculation` *(revisits the earlier "no strategy" decision, at the developer's request)* | Keeping the rule inside `TimeDepositCalculator`; per-plan strategies; factories or registries | The README requires calculation extensibility: a new rule shape becomes a new class instead of an edit. Rounding stays in the calculator, so every strategy is rounded the legacy way. |
+| One behavior-level `InterestCalculationStrategy`, with the legacy rule as `MonthlyInterestCalculation` *(revisits the earlier "no strategy" decision, at the developer's request)* | Keeping the rule inside `TimeDepositCalculator`; per-plan strategies; factories or registries | The README requires calculation extensibility: a new rule shape becomes a new class instead of an edit. Rounding stays in the calculator, so every strategy is rounded the legacy way. |
 | `PlanType.fromCode` returns `Optional` | `Enum.valueOf` | `valueOf` throws on unknown plans, which earned 0 before. |
 | `TimeDeposit` keeps `String planType` and has no `equals`/`hashCode` | Change the field type; add `equals` | It's a shared class: no breaking changes, and no change to how deposits compare. |
 | Code-first OpenAPI (springdoc) | Contract-first YAML + generator | Developer decision. |

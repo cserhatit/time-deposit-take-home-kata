@@ -10,7 +10,7 @@ import org.ikigaidigital.calculation.InterestCalculationStrategy;
  *
  * <p>Unknown plan types (matched case-sensitively) earn no interest.
  */
-public class StandardInterestCalculation implements InterestCalculationStrategy {
+public class MonthlyInterestCalculation implements InterestCalculationStrategy {
 
     private static final int MONTHS_PER_YEAR = 12;
 
