@@ -95,3 +95,15 @@ The README leaves these open; each is a deliberate choice.
 - **No constraint on `planType`:** unknown plan types can be stored, as before.
 - **IDs:** plain integer primary keys with no generation, since no endpoint creates records.
 - **Withdrawals:** returned ordered by id, `[]` when there are none. They do not affect interest.
+
+# comments
+
+I intentionally kept `PlanType` as an enum because the existing plans differ only in their configuration, not in their calculation behavior. Introducing a separate strategy for each plan would add unnecessary complexity at this stage.
+
+At the same time, I introduced `InterestCalculationStrategy` to separate the interest calculation algorithm from balance updates and rounding.
+
+This allows more complex calculation algorithms to be introduced without modifying the existing calculator or its public API.
+
+If future requirements involve different calculation methods per product, daily accrual, or more sophisticated interest rules, the design can be extended with strategy resolution and additional calculation context.
+
+The goal was to provide a clear and maintainable solution that is extensible without overengineering the current requirements.

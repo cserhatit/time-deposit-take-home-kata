@@ -1,8 +1,8 @@
 package org.ikigaidigital.calculation.standard;
 
-import org.ikigaidigital.InterestCalculationStrategy;
 import org.ikigaidigital.PlanType;
 import org.ikigaidigital.TimeDeposit;
+import org.ikigaidigital.calculation.InterestCalculationStrategy;
 
 /**
  * The standard (legacy) interest rule: one month of interest at the plan's annual rate ({@code rate / 12}),

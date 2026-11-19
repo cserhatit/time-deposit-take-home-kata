@@ -1,5 +1,6 @@
 package org.ikigaidigital;
 
+import org.ikigaidigital.calculation.InterestCalculationStrategy;
 import org.ikigaidigital.calculation.standard.StandardInterestCalculation;
 import org.junit.jupiter.api.Test;
 

@@ -1,5 +1,7 @@
-package org.ikigaidigital;
+package org.ikigaidigital.calculation;
 
+import org.ikigaidigital.TimeDeposit;
+import org.ikigaidigital.TimeDepositCalculator;
 import org.ikigaidigital.calculation.standard.StandardInterestCalculation;
 
 /**
