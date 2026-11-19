@@ -54,7 +54,7 @@ The assistant never commits.
 | Persistence | Implement plan step 3 | Entities, port, adapter, adapter tests | `5b20e7a` |
 | REST API | Implement plan step 4 | Service, controller, response records, API test | `1bdb393` |
 | Finish | Implement plan step 5 | `java/README.md`, documentation updates, dependency review | `a7ee4e0` |
-| Calculation extensibility | Review enum vs. strategy; add a minimal strategy extension point without changing behavior; developer adjustments: method name `calculateInterest`, the "gold" example only in tests | `InterestCalculationStrategy`, `StandardInterestCalculation`, `TimeDepositCalculatorStrategyTest` | uncommitted |
+| Calculation extensibility | Review enum vs. strategy; add a minimal strategy extension point without changing behavior; developer adjustments: method name `calculateInterest`, the "gold" example only in tests | `InterestCalculationStrategy`, `StandardInterestCalculation`, `TimeDepositCalculatorStrategyTest` | `33d853e` |
 
 ## 3. AI-Assisted Work
 
