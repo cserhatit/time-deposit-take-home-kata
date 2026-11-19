@@ -97,7 +97,7 @@ The README leaves these open; each is a deliberate choice.
 - **IDs:** plain integer primary keys with no generation, since no endpoint creates records.
 - **Withdrawals:** returned ordered by id, `[]` when there are none. They do not affect interest.
 
-# comments
+## Extensibility and design rationale
 
 I intentionally kept `PlanType` as an enum because the existing plans differ only in their configuration, not in their calculation behavior. Introducing a separate strategy for each plan would add unnecessary complexity at this stage.
 

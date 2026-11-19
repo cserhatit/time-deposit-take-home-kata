@@ -5,7 +5,7 @@ import org.ikigaidigital.TimeDeposit;
 import org.ikigaidigital.calculation.InterestCalculationStrategy;
 
 /**
- * The standard (legacy) interest rule: one month of interest at the plan's annual rate ({@code rate / 12}),
+ * The legacy interest rule, used by default: one month of interest at the plan's annual rate ({@code rate / 12}),
  * once the plan's interest-free days have passed and up to its last interest day, as configured in {@link PlanType}.
  *
  * <p>Unknown plan types (matched case-sensitively) earn no interest.

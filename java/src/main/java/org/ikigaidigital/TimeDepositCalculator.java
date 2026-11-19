@@ -43,7 +43,7 @@ public class TimeDepositCalculator {
      * Adds interest to the balance of every given deposit, in place.
      *
      * <p>
-     * Not idempotent: every call adds interest again, and {@code days} is not changed. With the standard rule, every call adds one month of
+     * Not idempotent: every call adds interest again, and {@code days} is not changed. With the default {@link MonthlyInterestCalculation}, every call adds one month of
      * interest and unknown plan types (matched case-sensitively) earn none.
      *
      * @param deposits
